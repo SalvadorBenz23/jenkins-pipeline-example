@@ -1,19 +1,15 @@
 pipeline {
-    agent any
+    agent none
     stages {
         stage('Build') {
-            steps {
-                echo 'Building...'
+            agent {
+                docker {
+                    image 'python:3.8-alpine3.16'
+                }
             }
-        }
-        stage('Test') {
             steps {
-                echo 'Testing...'
-            }
-        }
-        stage('Deploy') {
-            steps {
-                echo 'Deploying...'
+                sh 'python3.8 -m py_compile sources/prog.py sources/calc.py'
+                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
     }
