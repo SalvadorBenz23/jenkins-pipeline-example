@@ -69,7 +69,7 @@ pipeline {
         stage('Deliver') {
             agent any
             environment {
-                VOLUME = "${env.WORKSPACE}/sources:/src"
+                ABSOLUTE_VOLUME = "${env.WORKSPACE}/sources:/src"
                 IMAGE = 'cdrx/pyinstaller-linux'
             }
             steps {
@@ -78,7 +78,7 @@ pipeline {
                     unstash 'compiled-results'
                     sh '''
                         echo "Running PyInstaller to create executable..."
-                        docker run --rm -v ${VOLUME} ${IMAGE} "pyinstaller -F prog.py"
+                        docker run --rm -v ${ABSOLUTE_VOLUME} ${IMAGE} "pyinstaller -F prog.py"
                     '''
                 }
             }
