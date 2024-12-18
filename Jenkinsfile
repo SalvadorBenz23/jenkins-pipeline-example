@@ -68,28 +68,27 @@ pipeline {
 
         stage('Deliver') {
             agent any
-            environment {
-                ABSOLUTE_VOLUME = "${env.WORKSPACE}/sources:/src"
-                IMAGE = 'cdrx/pyinstaller-linux'
-            }
             steps {
                 echo 'Starting Deliver Stage...'
-                dir("${env.BUILD_ID}") {
+                dir("${env.WORKSPACE}/build") {
                     unstash 'compiled-results'
                     sh '''
                         echo "Running PyInstaller to create executable..."
-                        docker run --rm -v ${ABSOLUTE_VOLUME} ${IMAGE} "pyinstaller -F prog.py"
+                        docker run --rm \
+                        -v $(pwd)/sources:/src \
+                        cdrx/pyinstaller-linux \
+                        "pyinstaller -F prog.py"
                     '''
                 }
             }
             post {
                 success {
                     echo 'Archiving deliverable...'
-                    archiveArtifacts artifacts: "${env.BUILD_ID}/sources/dist/prog"
+                    archiveArtifacts artifacts: 'build/dist/prog'
 
                     echo 'Cleaning up build and dist directories...'
                     sh '''
-                        rm -rf ${env.BUILD_ID}/sources/build ${env.BUILD_ID}/sources/dist
+                        rm -rf build/sources/build build/sources/dist
                     '''
                 }
             }
