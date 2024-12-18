@@ -1,13 +1,21 @@
 # jenkins-pipeline-example
 deploying a jenkins pipeline
 
-## Build Stage
+Summary of Stages:
 
-### What’s Happening?
-	•	Agent: Runs this stage in a python:3.8-alpine3.16 Docker container.
-	•	Steps:
-	•	Compiles Python files to bytecode.
-	•	Stashes compiled files for later use in the pipeline.
+	1.	Build Stage:
+	•	Creates source files (prog.py and calc.py).
+	•	Compiles them into bytecode (__pycache__).
+	•	Stashes the compiled results for later use.
 
-### Why?
-	•	To validate that the Python code compiles correctly before testing or deployment.
+	2.	Test Stage:
+	•	Unstashes the compiled files.
+	•	Creates a dummy test file test_calc.py.
+	•	Runs tests using pytest, generating a JUnit-compatible XML report.
+	•	Archives the test results.
+
+	3.	Deliver Stage:
+	•	Unstashes compiled results.
+	•	Runs PyInstaller in a Docker container to generate an executable.
+	•	Archives the executable as an artifact.
+	•	Cleans up temporary build and dist directories.

@@ -1,5 +1,6 @@
 pipeline {
     agent none
+
     stages {
         stage('Build') {
             agent {
@@ -14,8 +15,8 @@ pipeline {
                     mkdir -p sources
 
                     echo "Creating dummy source files for testing..."
-                    echo "def add(a, b): return a + b" > sources/calc.py
-                    echo "if __name__ == '__main__': print('Hello World')" > sources/prog.py
+                    echo 'def add(a, b): return a + b' > sources/calc.py
+                    echo 'if __name__ == "__main__": print("Hello World")' > sources/prog.py
 
                     echo "Checking sources directory contents..."
                     ls -l sources
@@ -26,7 +27,7 @@ pipeline {
                     echo "Checking __pycache__ directory..."
                     ls -R sources/__pycache__
                 '''
-                stash(name: 'compiled-results', includes: 'sources/**')
+                stash name: 'compiled-results', includes: 'sources/*.py*'
             }
         }
 
@@ -38,7 +39,7 @@ pipeline {
             }
             steps {
                 echo 'Starting Test Stage...'
-                unstash 'compiled-results' // Retrieve stashed files
+                unstash 'compiled-results'
                 sh '''
                     echo "Creating test-reports directory..."
                     mkdir -p test-reports
@@ -47,7 +48,7 @@ pipeline {
                     ls -l sources
 
                     echo "Creating dummy test file..."
-                    echo "from calc import add; def test_add(): assert add(1, 2) == 3" > sources/test_calc.py
+                    echo 'from calc import add; def test_add(): assert add(1, 2) == 3' > sources/test_calc.py
 
                     echo "Running pytest and generating test results..."
                     pytest -v --junit-xml test-reports/results.xml sources/test_calc.py || \
@@ -59,8 +60,8 @@ pipeline {
             }
             post {
                 always {
-                    echo "Archiving test results..."
-                    junit "test-reports/results.xml"
+                    echo 'Archiving test results...'
+                    junit 'test-reports/results.xml'
                 }
             }
         }
@@ -68,12 +69,12 @@ pipeline {
         stage('Deliver') {
             agent any
             environment {
-                VOLUME = '$(pwd)/sources:/src'
+                VOLUME = "${env.WORKSPACE}/sources:/src"
                 IMAGE = 'cdrx/pyinstaller-linux'
             }
             steps {
                 echo 'Starting Deliver Stage...'
-                dir(path: env.BUILD_ID) {
+                dir("${env.BUILD_ID}") {
                     unstash 'compiled-results'
                     sh '''
                         echo "Running PyInstaller to create executable..."
