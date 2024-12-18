@@ -1,5 +1,6 @@
 pipeline {
     agent none
+
     stages {
         stage('Build') {
             agent {
@@ -9,7 +10,11 @@ pipeline {
             }
             steps {
                 sh '''
-                    echo "Building source files..."
+                    echo "Starting Build Stage..."
+                    mkdir -p sources
+                    echo "Checking sources directory..."
+                    ls -l
+                    echo "Compiling Python source files..."
                     python3.8 -m py_compile sources/prog.py sources/calc.py
                 '''
                 stash(name: 'compiled-results', includes: 'sources/*.py*')
@@ -24,16 +29,26 @@ pipeline {
             }
             steps {
                 sh '''
-                    echo "Running tests..."
+                    echo "Creating test-reports directory..."
                     mkdir -p test-reports
-                    ls -l sources
+
+                    echo "Listing contents of sources directory..."
+                    ls -la sources
+
+                    echo "Running pytest and generating test results..."
                     pytest -v --junit-xml test-reports/results.xml sources/test_calc.py || \
                     echo "Tests skipped: Mock environment."
+
+                    echo "Listing contents of test-reports directory..."
+                    ls -la test-reports
                 '''
             }
             post {
                 always {
-                    echo "Publishing test results..."
+                    echo "Checking if results.xml exists and its contents..."
+                    sh 'cat test-reports/results.xml || echo "results.xml not found or empty."'
+
+                    echo "Archiving test results..."
                     junit "test-reports/results.xml"
                 }
             }
