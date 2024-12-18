@@ -1,6 +1,5 @@
 pipeline {
     agent none
-
     stages {
         stage('Build') {
             agent {
@@ -9,15 +8,18 @@ pipeline {
                 }
             }
             steps {
+                echo 'Starting Build Stage...'
                 sh '''
-                    echo "Starting Build Stage..."
+                    echo "Creating sources directory..."
                     mkdir -p sources
+
                     echo "Checking sources directory..."
                     ls -l
+
                     echo "Compiling Python source files..."
                     python3.8 -m py_compile sources/prog.py sources/calc.py
                 '''
-                stash(name: 'compiled-results', includes: 'sources/*.py*')
+                stash(name: 'compiled-results', includes: 'sources/*.py* sources/*.py')
             }
         }
 
@@ -28,6 +30,8 @@ pipeline {
                 }
             }
             steps {
+                echo 'Starting Test Stage...'
+                unstash 'compiled-results'  // Retrieve stashed files
                 sh '''
                     echo "Creating test-reports directory..."
                     mkdir -p test-reports
@@ -50,6 +54,35 @@ pipeline {
 
                     echo "Archiving test results..."
                     junit "test-reports/results.xml"
+                }
+            }
+        }
+
+        stage('Deliver') {
+            agent any
+            environment {
+                VOLUME = '$(pwd)/sources:/src'
+                IMAGE = 'cdrx/pyinstaller-linux'
+            }
+            steps {
+                echo 'Starting Deliver Stage...'
+                dir(path: env.BUILD_ID) {
+                    unstash(name: 'compiled-results')
+                    sh '''
+                        echo "Running PyInstaller to create executable..."
+                        docker run --rm -v ${VOLUME} ${IMAGE} "pyinstaller -F prog.py"
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Archiving deliverable...'
+                    archiveArtifacts "${env.BUILD_ID}/sources/dist/prog"
+
+                    echo 'Cleaning up build and dist directories...'
+                    sh '''
+                        rm -rf ${env.BUILD_ID}/sources/build ${env.BUILD_ID}/sources/dist
+                    '''
                 }
             }
         }
