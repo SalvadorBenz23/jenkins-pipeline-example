@@ -9,8 +9,8 @@ pipeline {
             }
             steps {
                 sh '''
-                    python3.8 -m py_compile sources/prog.py sources/calc.py || \
-                    echo "Build skipped: Mock files used."
+                    echo "Building source files..."
+                    python3.8 -m py_compile sources/prog.py sources/calc.py
                 '''
                 stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
@@ -24,12 +24,16 @@ pipeline {
             }
             steps {
                 sh '''
+                    echo "Running tests..."
+                    mkdir -p test-reports
+                    ls -l sources
                     pytest -v --junit-xml test-reports/results.xml sources/test_calc.py || \
                     echo "Tests skipped: Mock environment."
                 '''
             }
             post {
                 always {
+                    echo "Publishing test results..."
                     junit "test-reports/results.xml"
                 }
             }
