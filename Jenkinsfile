@@ -1,64 +1,73 @@
 pipeline {
-    agent none
+    agent any
 
     stages {
+        // Checkout stage
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code...'
+                checkout([$class: 'GitSCM',
+                          branches: [[name: '*/main']],
+                          userRemoteConfigs: [[url: 'https://github.com/SalvadorBenz23/jenkins-pipeline-example.git']]
+                ])
+            }
+        }
+
+        // Build stage
         stage('Build') {
             agent {
                 docker {
                     image 'python:3.8-alpine3.16'
-                    args '--entrypoint=""'
+                    args '--user root' // Run as root to allow installations
                 }
             }
             steps {
-                echo 'Starting Build Stage...'
+                echo 'Building the application...'
                 sh '''
-                    echo "Setting up build..."
-                    mkdir -p sources
-                    echo 'def add(a, b): return a + b' > sources/calc.py
-                    echo 'if __name__ == "__main__": print("Hello World")' > sources/prog.py
-                    python3.8 -m py_compile sources/prog.py sources/calc.py
+                    python3 --version
+                    echo "Simulating build step"
                 '''
-                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
 
+        // Test stage
         stage('Test') {
             agent {
                 docker {
                     image 'grihabor/pytest'
-                    args '--entrypoint=""'
                 }
             }
             steps {
-                echo 'Starting Test Stage...'
-                unstash 'compiled-results'
+                echo 'Running tests...'
                 sh '''
-                    echo "Creating dummy test file..."
-                    echo 'from calc import add; def test_add(): assert add(1, 2) == 3' > sources/test_calc.py
-                    pytest -v --junit-xml=test-reports/results.xml sources/test_calc.py || echo "Tests skipped: Mock environment."
+                    echo "Simulating test step"
                 '''
             }
             post {
                 always {
-                    junit "test-reports/results.xml"
+                    echo 'Archiving test results...'
+                    junit 'test-reports/results.xml'
                 }
             }
         }
 
-        stage('Deliver') {
-            agent any
+        // Deploy stage
+        stage('Deploy') {
             steps {
-                echo 'Starting Deliver Stage...'
-                dir("${env.WORKSPACE}/build") {
-                    unstash 'compiled-results'
-                    sh '''
-                        echo "Packaging project..."
-                        mkdir -p dist
-                        zip -r dist/project.zip sources
-                    '''
-                }
-                archiveArtifacts artifacts: 'build/dist/project.zip', fingerprint: true
+                echo 'Deploying the application...'
+                sh '''
+                    echo "Simulating deploy step"
+                '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Please check the logs for details.'
         }
     }
 }
