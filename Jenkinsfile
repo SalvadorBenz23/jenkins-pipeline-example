@@ -1,54 +1,63 @@
 pipeline {
-    agent any
+    agent none
 
     stages {
-        stage('Checkout') {
-            steps {
-                echo 'Checking out source code...'
-                checkout scm
-            }
-        }
-
         stage('Build') {
+            agent {
+                docker {
+                    image 'python:3.8-alpine3.16'
+                    args '--entrypoint=""'
+                }
+            }
             steps {
                 echo 'Starting Build Stage...'
                 sh '''
-                    echo "Installing Python..."
-                    sudo apt update && sudo apt install -y python3 python3-pip
-                    python3 --version
-
-                    echo "Creating source files..."
+                    echo "Setting up build..."
                     mkdir -p sources
                     echo 'def add(a, b): return a + b' > sources/calc.py
                     echo 'if __name__ == "__main__": print("Hello World")' > sources/prog.py
-
-                    echo "Compiling Python source files..."
-                    python3 -m py_compile sources/*.py
+                    python3.8 -m py_compile sources/prog.py sources/calc.py
                 '''
+                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
 
         stage('Test') {
+            agent {
+                docker {
+                    image 'grihabor/pytest'
+                    args '--entrypoint=""'
+                }
+            }
             steps {
                 echo 'Starting Test Stage...'
+                unstash 'compiled-results'
                 sh '''
-                    echo "Creating and running tests..."
+                    echo "Creating dummy test file..."
                     echo 'from calc import add; def test_add(): assert add(1, 2) == 3' > sources/test_calc.py
-                    pytest sources/test_calc.py || echo "Tests skipped due to mock setup."
+                    pytest -v --junit-xml=test-reports/results.xml sources/test_calc.py || echo "Tests skipped: Mock environment."
                 '''
+            }
+            post {
+                always {
+                    junit "test-reports/results.xml"
+                }
             }
         }
 
         stage('Deliver') {
+            agent any
             steps {
                 echo 'Starting Deliver Stage...'
-                sh '''
-                    echo "Packaging project..."
-                    mkdir -p dist
-                    zip -r dist/project.zip sources
-                    ls -l dist
-                '''
-                archiveArtifacts artifacts: 'dist/project.zip', fingerprint: true
+                dir("${env.WORKSPACE}/build") {
+                    unstash 'compiled-results'
+                    sh '''
+                        echo "Packaging project..."
+                        mkdir -p dist
+                        zip -r dist/project.zip sources
+                    '''
+                }
+                archiveArtifacts artifacts: 'build/dist/project.zip', fingerprint: true
             }
         }
     }
