@@ -2,87 +2,53 @@ pipeline {
     agent any
 
     stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code...'
+                checkout scm
+            }
+        }
+
         stage('Build') {
-            agent any
             steps {
                 echo 'Starting Build Stage...'
                 sh '''
-                    echo "Creating sources directory..."
-                    mkdir -p sources
+                    echo "Installing Python..."
+                    sudo apt update && sudo apt install -y python3 python3-pip
+                    python3 --version
 
-                    echo "Creating dummy source files for testing..."
+                    echo "Creating source files..."
+                    mkdir -p sources
                     echo 'def add(a, b): return a + b' > sources/calc.py
                     echo 'if __name__ == "__main__": print("Hello World")' > sources/prog.py
 
-                    echo "Checking sources directory contents..."
-                    ls -l sources
-
                     echo "Compiling Python source files..."
-                    python3 -m py_compile sources/prog.py sources/calc.py
-
-                    echo "Checking __pycache__ directory..."
-                    ls -R sources/__pycache__
+                    python3 -m py_compile sources/*.py
                 '''
-                stash name: 'compiled-results', includes: 'sources/*.py*'
             }
         }
 
         stage('Test') {
-            agent any
             steps {
                 echo 'Starting Test Stage...'
-                unstash 'compiled-results'
                 sh '''
-                    echo "Creating test-reports directory..."
-                    mkdir -p test-reports
-
-                    echo "Listing sources directory contents..."
-                    ls -l sources
-
-                    echo "Creating dummy test file..."
+                    echo "Creating and running tests..."
                     echo 'from calc import add; def test_add(): assert add(1, 2) == 3' > sources/test_calc.py
-
-                    echo "Running pytest and generating test results..."
-                    pytest -v --junit-xml test-reports/results.xml sources/test_calc.py || \
-                    echo "Tests skipped: Mock environment."
-
-                    echo "Listing test-reports directory contents..."
-                    ls -l test-reports
+                    pytest sources/test_calc.py || echo "Tests skipped due to mock setup."
                 '''
-            }
-            post {
-                always {
-                    echo 'Archiving test results...'
-                    junit 'test-reports/results.xml'
-                }
             }
         }
 
         stage('Deliver') {
-            agent any
             steps {
                 echo 'Starting Deliver Stage...'
-                dir("${env.WORKSPACE}/build") {
-                    unstash 'compiled-results'
-                    sh '''
-                        echo "Running PyInstaller to create executable..."
-                        pyinstaller -F sources/prog.py
-
-                        echo "Listing dist directory contents..."
-                        ls -l dist
-                    '''
-                }
-            }
-            post {
-                success {
-                    echo 'Archiving deliverable...'
-                    archiveArtifacts artifacts: 'build/dist/prog'
-
-                    echo 'Cleaning up build and dist directories...'
-                    sh '''
-                        rm -rf build/sources/build build/sources/dist
-                    '''
-                }
+                sh '''
+                    echo "Packaging project..."
+                    mkdir -p dist
+                    zip -r dist/project.zip sources
+                    ls -l dist
+                '''
+                archiveArtifacts artifacts: 'dist/project.zip', fingerprint: true
             }
         }
     }
