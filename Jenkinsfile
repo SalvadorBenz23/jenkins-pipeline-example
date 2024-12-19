@@ -3,6 +3,9 @@ pipeline {
 
     environment {
         PROJECT_NAME = "Pipeline Project"
+        PYTHON_IMAGE = "python:3.8-alpine3.16"
+        TEST_IMAGE = "grihabor/pytest"
+        DEPLOY_IMAGE = "cdrx/pyinstaller-linux"
     }
 
     stages {
@@ -14,37 +17,64 @@ pipeline {
         }
 
         stage('Build') {
+            agent {
+                docker {
+                    image "${PYTHON_IMAGE}"
+                }
+            }
             steps {
                 echo 'Building the project...'
                 sh '''
-                echo "Simulating a build step..."
-                mkdir -p build
-                echo "Build output" > build/output.txt
+                    echo "Simulating source creation..."
+                    mkdir -p sources
+                    echo "def add(a, b): return a + b" > sources/calc.py
+                    echo "if __name__ == '__main__': print('Hello World')" > sources/prog.py
+
+                    echo "Compiling Python source files..."
+                    python3 -m py_compile sources/prog.py sources/calc.py
                 '''
-                stash name: 'build-output', includes: 'build/**'
+                stash name: 'build-output', includes: 'sources/**/*.pyc'
             }
         }
 
         stage('Test') {
+            agent {
+                docker {
+                    image "${TEST_IMAGE}"
+                }
+            }
             steps {
                 echo 'Running tests...'
                 unstash 'build-output'
                 sh '''
-                echo "Simulating a test step..."
-                echo "Tests passed!" > build/test-results.txt
+                    echo "Creating test file..."
+                    echo "from calc import add; def test_add(): assert add(1, 2) == 3" > sources/test_calc.py
+                    
+                    echo "Running pytest..."
+                    pytest -v --junit-xml test-reports/results.xml sources/test_calc.py
                 '''
-                stash name: 'test-results', includes: 'build/test-results.txt'
+                junit 'test-reports/results.xml'
+                stash name: 'test-results', includes: 'test-reports/*.xml'
             }
         }
 
         stage('Deploy') {
+            agent {
+                docker {
+                    image "${DEPLOY_IMAGE}"
+                }
+            }
             steps {
                 echo 'Deploying the project...'
                 unstash 'test-results'
                 sh '''
-                echo "Simulating deployment..."
-                cat build/test-results.txt
+                    echo "Packaging application..."
+                    pyinstaller --onefile sources/prog.py
+
+                    echo "Deployment artifact:"
+                    ls -lh dist/
                 '''
+                archiveArtifacts artifacts: 'dist/prog', fingerprint: true
             }
         }
     }
@@ -58,7 +88,7 @@ pipeline {
             echo 'Pipeline succeeded.'
         }
         failure {
-            echo 'Pipeline failed. Check logs for details.'
+            echo 'Pipeline failed. Please check the logs for details.'
         }
     }
 }
